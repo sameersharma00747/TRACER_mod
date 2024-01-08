@@ -7,12 +7,34 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from dataloader import get_test_augmentation
-from model.TRACER import TRACER
+from model_tracer.TRACER import TRACER
 from util.utils import load_pretrained
 import torch.nn as nn
 import urllib
 from torchvision.transforms import transforms
 
+
+# class Inference():
+#     def __init__(self, args):
+#         super(Inference, self).__init__()
+#         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#         self.transform = get_test_augmentation(img_size=args.img_size)
+#         self.args = args
+
+#         self.invTrans = transforms.Compose([ transforms.Normalize(mean = [ 0., 0., 0. ],
+#                                                             std = [ 1/0.229, 1/0.224, 1/0.225 ]),
+#                                         transforms.Normalize(mean = [ -0.485, -0.456, -0.406 ],
+#                                                             std = [ 1., 1., 1. ]),
+#                                     ])
+
+#         # Network
+#         self.model = TRACER(args).to(self.device)
+#         self.model = nn.DataParallel(self.model).to(self.device)
+
+#         path = load_pretrained(f'TE-{args.arch}', self.device)
+#         self.model.load_state_dict(path)
+#         self.model.eval()
+#         print('###### pre-trained Model restored #####')
 
 class Inference():
     def __init__(self, args):
@@ -21,18 +43,20 @@ class Inference():
         self.transform = get_test_augmentation(img_size=args.img_size)
         self.args = args
 
-        self.invTrans = transforms.Compose([ transforms.Normalize(mean = [ 0., 0., 0. ],
-                                                            std = [ 1/0.229, 1/0.224, 1/0.225 ]),
-                                        transforms.Normalize(mean = [ -0.485, -0.456, -0.406 ],
-                                                            std = [ 1., 1., 1. ]),
-                                    ])
+        self.invTrans = transforms.Compose([ transforms.Normalize(mean=[0., 0., 0.],
+                                                                 std=[1/0.229, 1/0.224, 1/0.225]),
+                                            transforms.Normalize(mean=[-0.485, -0.456, -0.406],
+                                                                 std=[1., 1., 1.]),
+                                          ])
 
         # Network
         self.model = TRACER(args).to(self.device)
-        self.model = nn.DataParallel(self.model).to(self.device)
-
-        path = load_pretrained(f'TE-{args.arch}', self.device)
-        self.model.load_state_dict(path)
+        model_state_dict = load_pretrained(f'TE-{args.arch}', self.device)
+        
+        if 'module.' in list(model_state_dict.keys())[0]:
+            model_state_dict = {k.replace('module.', ''): v for k, v in model_state_dict.items()}
+        self.model.load_state_dict(model_state_dict)
+        
         self.model.eval()
         print('###### pre-trained Model restored #####')
 
@@ -40,6 +64,7 @@ class Inference():
     def test(self, image):
         if isinstance(image, Image.Image):
             image = np.array(image)
+            h, w = image.shape[:2]
 
         elif isinstance(image, str): # if path or URL
             if "http" in image or "https" in image:
